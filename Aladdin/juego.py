@@ -33,7 +33,7 @@ class plataforma(pygame.sprite.Sprite):
 #la herencia no es aplicable debido al uso de sprites 
 #movimiento a la derecha e izquierda
 class Movimiento(pygame.sprite.Sprite):
-	"""docstring for Movimiento"""
+
 	def __init__(self, top, left, right, velocidad):
 		pygame.sprite.Sprite.__init__(self)
 		self.image = pygame.image.load('res/plataforma.png')
@@ -123,6 +123,58 @@ class Moneda(pygame.sprite.Sprite):
         if self.wait == 1:
             self.rect.left -= 3
 
+class Rock (pygame.sprite.Sprite):
+
+    def __init__ (self, left, anticipacion, velocidad):
+        pygame.sprite.Sprite.__init__(self)
+        self.frames = [pygame.image.load('res/rock1.png'),pygame.image.load('res/rock2.png')]
+        self.image = self.frames[0]
+        self.rect = self.image.get_rect()
+        self.rect.left = left
+        self.init = left
+        self.rect.top = -self.rect.height/2
+        self.anticipacion = anticipacion
+        self.anticipado = 0
+        self.vy = 0
+        self.velocidad = velocidad
+        self.esperaragitar = 0
+    
+    def shake(self):
+        k = randint(0,5)
+        if self.esperaragitar == 1:
+            self.rect.left += k
+        elif self.esperaragitar == 3:
+            self.rect.left -= k
+        self.esperaragitar += 1
+        self.esperaragitar %= 4
+
+
+    def red(self):
+        self.image = self.frames[1]
+        
+    def fall(self):
+        self.rect.left = self.init
+        self.image = self.frames[0]
+        self.vy = self.velocidad
+    
+
+    def update (self):
+        
+        if self.anticipado in range (self.anticipacion/3, self.anticipacion):
+            self.shake()
+        if self.anticipado  in range (self.anticipacion * 2 /3, self.anticipacion):
+            self.red ()
+        elif self.anticipado > self.anticipacion:
+            self.fall()
+        else:
+            self.vy = 0
+
+        if self.rect.top > 300:
+            self.kill()
+            
+        self.anticipado += 1
+        self.rect.top += self.vy
+
 
 
 class Aladdin (pygame.sprite.Sprite):
@@ -141,6 +193,7 @@ class Aladdin (pygame.sprite.Sprite):
         self.image = self.stay
 
         #settings for player's movements
+        #opciones de movimiento para el jugadores
         self.velocidad = 8
         self.falspeed = 10
         self.velocidadsalto = -12
@@ -157,7 +210,7 @@ class Aladdin (pygame.sprite.Sprite):
         self.saltando = False
         self.jumpable = False
         self.start = time.time()
-        self.paused = time.time() - time.time() #to make it 0 in time format
+        self.paused = time.time() - time.time() 
         self.t= time.time()
         self.texto = pygame.font.Font('res/font/04B_03__.TTF', 14)
         self.text1 = pygame.font.Font('res/font/04B_03__.TTF', 10)
@@ -215,7 +268,8 @@ class Aladdin (pygame.sprite.Sprite):
         if self.x + self.vx in range (0 - self.velocidad,533 - self.rect.width + self.velocidad):
             self.x += self.vx
         elif self.x + self.vx > 533 - self.rect.width + self.velocidad:
-            if Aladdin.monedas == 1:
+            # numero de monedas para pasar de nivel
+            if Aladdin.monedas == 5:
                 NuevoJuego(self.nivel+1)
             else:
                 self.advertencia = self.texto.render('recoge las monedas primero', False, (255,0,0))
@@ -249,34 +303,124 @@ class Aladdin (pygame.sprite.Sprite):
         self.rockfrequency += 1
         self.rockfrequency %= self.frecuencia_roca #Aumentar la frecuencia de la ricas 
         if self.rockfrequency == 0:
-            self.rockrandom = randint (0, 500)
+            self.rockrandom = randint (0, 500)  # colocar las rocas aleatorianmente  dentro del rango 0- 500 (pantalla)
             self.rocks.append(Rock(self.rockrandom, self.anticipacion_roca, 10))
             self.globalrocks.add(self.rocks.pop())
 
         self.mensaje3 = self.texto.render(str(round(self.t,1))+ ' ' + 's', False, (255,255,255))
         
         
+class Juego():
+    def __init__(self, nivel, plataforma, monedas, frecuencia_roca, anticipacion_roca):
+        #instanciando las clases
+        #[bottom floor, middle floor, top floor, first stopper, second stopper]
+        self.floor = [Piso(194,0,275),Piso(147,207,248),Piso(190,355,224)]
+        self.stops = [Piso(10,194,261),Piso(10,342,236)]
+        self.monedas = monedas
+        self.plataforma = plataforma
+        self.sprites = pygame.sprite.Group(self.plataforma,self.monedas)
+        self.rocks = pygame.sprite.Group()
+        self.aladdin = Aladdin(self, nivel, frecuencia_roca, anticipacion_roca)
+        self.character = pygame.sprite.Group(self.aladdin)
+        
+        #sprites para la  plataforma
+        if desarrollador:
+            for item in plataforma:
+                self.sprites.add(item.tech_sprite_lower,item.tech_sprite_upper)
+            
+        
+        self.spritespisos = pygame.sprite.Group(self.floor)
+        self.spritesparadas = pygame.sprite.Group(self.stops)
+
+def compare(x,y):
+    if float(x[1]) > float (y[1]):
+        return 1
+    else:
+        return -1
+
+def build_highscores(names):
+    names = sorted(names, cmp=compare)
+    table = []
+
+    for i in range(5):
+        table.append ([texto.render(names[i][0], False, (255,255,255)),texto.render(names [i][1] + 's', False, (255,255,255))])
+    return table
+        
+def NuevoJuego(nivel):
+    global juego, tiempos, estructura
+    if nivel == 1:
+        pygame.mixer.music.fadeout(100)
+        pygame.mixer.music.load('res/game_bg.mp3')
+        pygame.mixer.music.set_volume(volume / 5.0)
+        pygame.mixer.music.play(-1, 0.0)
+        juego = Juego (nivel, [Movimiento (100, 100, 120, 3), plataforma (40, 150), plataforma (120, 180), 
+                        plataforma (200,200),plataforma (186, 120), plataforma (266, 90)],
+                    [Moneda(116,45), Moneda(56,132), Moneda(282,72), Moneda (216,182), Moneda (385,55)],
+                     40,50)
+        
+        #colocar las monedas en las plataformas: (x+16,y-18)  
+        tiempos = []
+        
+    if nivel == 2:
+        tiempos.append(round(juego.aladdin.t,1))
+        juego = Juego (nivel, [plataforma (1, 138), plataforma (48, 180),plataforma (48, 99),
+                             plataforma (115, 170), plataforma(160, 85),
+                             plataforma (340, 118), plataforma (400, 90),
+                             Elevador(460, 120, 210, 3), Elevador(265, 70, 230, 3)],
+                     [Moneda(64,142), Moneda(131,116), Moneda(131,67), Moneda (310,50), Moneda (476,82)],
+                     30, 40)
+
+    if nivel == 3:
+        tiempos.append(round(juego.aladdin.t,1))
+        juego = Juego (nivel, [plataforma (0, 140), plataforma (55, 75), plataforma (120, 100),
+                             plataforma (195, 75), plataforma (275, 95), plataforma (350, 75),
+                             Elevador(450, 70, 200, 4)],
+                     [Moneda(16,122), Moneda(136,82), Moneda(291,77), Moneda (475,35), Moneda (75,155)],
+                     25, 35)
+        
+    if nivel == 4:
+        tiempos.append(round(juego.aladdin.t,1))
+        juego = Juego (nivel, [Elevador(220, 70, 220, 5)],
+                     [Moneda(225,35), Moneda(115,25), Moneda(140,150), Moneda (330,20), Moneda (345,130)],
+                     20,35)
+        
+    if nivel == 5:
+        tiempos.append(round(juego.aladdin.t,1))
+        juego = Juego (nivel, [plataforma (129, 208), plataforma (49, 186), plataforma (100, 134), 
+                             plataforma (452, 91), plataforma (482, 135),plataforma (439, 180)],
+                    [Moneda(17,152), Moneda(159,65), Moneda(311,76), Moneda (466,39), Moneda (450,157)],
+                     15, 15)
+
+    if nivel == 6:
+        tiempos.append(round(juego.aladdin.t,1))
+        estructura = 'win'
+        #win sonido
+        pygame.mixer.music.fadeout(50)
+        win_s.play()
+
+
 
 def main():
     global juego, tiempos, estructura, texto, volume, win_s
 #inicializar los graficos
-    pygame.init()
+    
+    pygame.init()  # incializar los modulos de 
     pygame.font.init()
-    FPS = 30
-    fpsClock = pygame.time.Clock()
-    height = 300
-    width = 533
+    FPS = 30      # velocidad del juego.
+    fpsClock = pygame.time.Clock()   #Crear objeto cloc usado para gestionar el  tiempo
+    height = 300   #altura de la ventana 
+    width = 533    # ancho de la ventana 
 
 #posible escalado del juego
     scale = 2
-
-    pantalla = pygame.display.set_mode((width, height),0,32) #32 colores 
-    pygame.display.set_caption("Aladdino")
-    imagenfondo = pygame.image.load('res/imagenfondo.png').convert()
-    bg1 = pygame.image.load('res/pausa.png').convert_alpha()
+   
+    pantalla = pygame.display.set_mode((width, height))   # crear la ventana 
+    pygame.display.set_caption("Aladdino")       #nombre de la ventana 
+    imagenfondo = pygame.image.load('res/imagenfondo.png').convert() # metodo load de pygame para cargar imagenes
+    bg1 = pygame.image.load('res/pausa.png').convert()  # cmabiar el formato de pixeles de la imagen 
     moneda = pygame.image.load('res/moneda.png')
-    moneda = pygame.transform.scale(moneda,(14, 14))
-    timer = pygame.image.load('res/time.png')
+    moneda = pygame.transform.scale(moneda,(14, 14))  # escala de la imagen de moneda
+    timer = pygame.image.load('res/time.png')     
     
     win = [0,pygame.image.load('res/Ganador1.png'),pygame.image.load('res/Ganador2.png')]
 
@@ -286,8 +430,8 @@ def main():
 
 #almacenar el tiempo completo
     tiempos = []
-    texto = pygame.font.Font('res/font/04B_03__.TTF', 20)
-    text_big = pygame.font.Font('res/font/04B_03__.TTF', 22)
+    texto = pygame.font.Font('res/font/04B_03__.TTF', 20)   #formato de texto
+    text_big = pygame.font.Font('res/font/04B_03__.TTF', 22)  #formato de texto
 #nombre de los jugadores
     letters = []
 
@@ -305,18 +449,18 @@ def main():
     estructura = 'menu'
 
 #opciones
-    opciones = [0,pygame.image.load('res/Opcion1.png'),pygame.image.load('res/Opcion2.png'),pygame.image.load('res/Opcion3.png'),\
+    opciones = [0,pygame.image.load('res/Opcion1.png'),pygame.image.load('res/Opcion2.png'),pygame.image.load('res/Opcion3.png'),
                pygame.image.load('res/Opcion4.png')]
     musicon = 1
     sfxon = 1
     onoffpick = [pygame.image.load('res/Apagado.png'),pygame.image.load('res/Encendido.png')]
     onoffunpick = [pygame.image.load('res/Apagado.png'),pygame.image.load('res/Encendido.png')]
     volume = 5
-    volumepick = [0,pygame.image.load('res/Apagado.png'),pygame.image.load('res/volume_pick_20.png'),\
-                  pygame.image.load('res/volume_pick_40.png'),pygame.image.load('res/volume_pick_60.png'),\
+    volumepick = [0,pygame.image.load('res/Apagado.png'),pygame.image.load('res/volume_pick_20.png'),
+                  pygame.image.load('res/volume_pick_40.png'),pygame.image.load('res/volume_pick_60.png'),
                   pygame.image.load('res/volume_pick_80.png'),pygame.image.load('res/volume_pick_100.png')]
-    volumeunpick = [0,pygame.image.load('res/Apagado.png'),pygame.image.load('res/volume_unpick_20.png'),\
-                  pygame.image.load('res/volume_unpick_40.png'),pygame.image.load('res/volume_unpick_60.png'),\
+    volumeunpick = [0,pygame.image.load('res/Apagado.png'),pygame.image.load('res/volume_unpick_20.png'),
+                  pygame.image.load('res/volume_unpick_40.png'),pygame.image.load('res/volume_unpick_60.png'),
                   pygame.image.load('res/volume_unpick_80.png'),pygame.image.load('res/volume_unpick_100.png')]
 
 #sobre
@@ -330,6 +474,7 @@ def main():
     pygame.mixer.music.play(-1, 0.0)
 
 #Sonidos secundarios
+ #utilizar el metodo mixer para cargar la musica
     coin_s = pygame.mixer.Sound('res/moneda.wav')
     tick_s = pygame.mixer.Sound('res/tick.wav')
     jump_s = pygame.mixer.Sound('res/jump.wav')
@@ -438,13 +583,14 @@ def main():
                 
             #grupo de caracteres esta hecho para que se coloquen antes del personaje
 
-                pantalla.blit(imagenfondo, (0,0))
+                pantalla.blit(imagenfondo, (0,0))   #mostar imagen de fondo en la posición 0,0
                 juego.sprites.clear(pantalla,imagenfondo)
                 juego.character.clear(pantalla,imagenfondo)
                 juego.rocks.clear(pantalla,imagenfondo)
                 juego.sprites.draw(pantalla)
                 juego.character.draw(pantalla)
                 juego.rocks.draw(pantalla)
+                
                 pantalla.blit(juego.aladdin.message3, (85,75))
                 pantalla.blit(juego.aladdin.mensaje,(483,257))
                 pantalla.blit(juego.aladdin.mensaje3,(483,275))
@@ -681,7 +827,7 @@ def main():
                 puntajesaltos.close()
                 pygame.quit()
                 os._exit(1)
-                
+            #evento al presionar un  botón
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     estructura = "menu"
@@ -694,11 +840,12 @@ def main():
                     opciones[0] -= 1
                     opciones[0] %= 4
                 if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
-                    if opciones[0] == 0:
-                        tick_s.play()
-                        musicon += 1
+                    if opciones[0] == 0: #posicion de la imagen off en 0
+                        tick_s.play()         # reporduciti sonido
+                        musicon += 1     
                         musicon %= 2
                     if opciones[0] == 1:
+                        print("entra" )
                         tick_s.play()
                         sfxon += 1
                         sfxon %= 2
@@ -855,6 +1002,6 @@ def main():
             
                         
         pygame.display.update()
-        fpsClock.tick(FPS)
+        fpsClock.tick(FPS)  # tiempo transcurrido y velocidad del juego
 
 main()
